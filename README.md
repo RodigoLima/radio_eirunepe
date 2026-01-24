@@ -19,7 +19,7 @@ Aplicativo oficial da Rádio Eirunepé para Android. Ouça ao vivo o Programa Eo
 
 ## 📋 Requisitos
 
-- Android 5.0 (API 21) ou superior
+- Android 6.0 (API 23) ou superior
 - Conexão com a internet
 
 ## 🛠️ Tecnologias

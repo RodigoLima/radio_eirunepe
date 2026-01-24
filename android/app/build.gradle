@@ -27,7 +27,7 @@ android {
 
     defaultConfig {
         applicationId "com.radio_eirunepe.aab"
-        minSdk = 21  // Android 5.0 - máxima compatibilidade
+        minSdk = 23  // Android 6.0 - compatível com 16KB page size
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -53,7 +53,10 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Removido debugSymbolLevel FULL - reduz significativamente o tamanho do APK
+            // Símbolos de depuração para Google Play Console
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
     }
 }
