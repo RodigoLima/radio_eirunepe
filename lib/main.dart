@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'services/radio_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await RadioService().configure();
   runApp(const MyApp());
 }
 
@@ -14,9 +17,9 @@ class MyApp extends StatelessWidget {
       title: 'Rádio Eirunepé',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF02457B), // Indigo dye
-          primary: const Color(0xFFB11E27), // Tom de vermelho
-          secondary: const Color(0xFFFBE926), // Aureolin
+          seedColor: const Color(0xFF02457B),
+          primary: const Color(0xFFB11E27),
+          secondary: const Color(0xFFFBE926),
           background: Colors.white,
           surface: Colors.white,
           onPrimary: Colors.white,
@@ -46,118 +49,114 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.light,
-      home: const MyHomePage(title: 'Rádio Eirunepé'),
+      home: const RadioHomePage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
+class RadioHomePage extends StatefulWidget {
+  const RadioHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<RadioHomePage> createState() => _RadioHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+class _RadioHomePageState extends State<RadioHomePage> {
+  final RadioService _radioService = RadioService();
   bool _isPlaying = false;
   bool _isLoading = false;
-
-  // Em caso de querer controlar se o widget está montado.
-  bool _disposed = false;
-
-  final String _streamUrl = 'https://s12.maxcast.com.br:8824/live?id=391239150545';
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
+    _setupListeners();
+  }
 
-    // Listener principal para o estado do player
-    _audioPlayer.playerStateStream.listen((playerState) {
-      // Se o widget foi dispose, não execute mais nada.
+  void _setupListeners() {
+    _radioService.player.playerStateStream.listen((playerState) {
       if (!mounted) return;
 
       if (playerState.processingState == ProcessingState.ready && playerState.playing) {
         setState(() {
           _isLoading = false;
           _isPlaying = true;
+          _errorMessage = null;
         });
       } else if (playerState.processingState == ProcessingState.completed ||
                  playerState.processingState == ProcessingState.idle) {
-        // Quando o streaming termina ou fica idle
         setState(() {
           _isLoading = false;
           _isPlaying = false;
         });
+      } else if (playerState.processingState == ProcessingState.loading) {
+        setState(() {
+          _isLoading = true;
+          _errorMessage = null;
+        });
       }
-      // Você pode tratar mais casos conforme sua necessidade.
     }, onError: (error, stackTrace) {
-      // Captura de erros do playerStateStream
       debugPrint('Erro no playerStateStream: $error');
-      _showSnackBar('Ocorreu um erro no player: $error');
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isPlaying = false;
+        _errorMessage = 'Erro ao reproduzir áudio';
       });
+      _showSnackBar('Erro ao reproduzir áudio');
     });
 
-    // Listener para eventos de playback (outro stream que pode indicar falhas)
-    _audioPlayer.playbackEventStream.listen((event) {
-      // Normalmente não é preciso usar setState aqui, apenas se desejar exibir informações de buffer etc.
-    }, onError: (error, stackTrace) {
-      // Captura de erros no playbackEventStream
-      debugPrint('Erro no playbackEventStream: $error');
-      _showSnackBar('Ocorreu um erro de reprodução: $error');
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-        _isPlaying = false;
-      });
-    });
+    // Listener de playback removido - não é necessário, o playerStateStream já cobre tudo
   }
 
   Future<void> _startStream() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = null;
     });
 
     try {
-      // Exemplo: verificar conectividade antes de iniciar
-      // final connectivityResult = await (Connectivity().checkConnectivity());
-      // if (connectivityResult == ConnectivityResult.none) {
-      //   _showSnackBar('Sem conexão com a internet!');
-      //   setState(() => _isLoading = false);
-      //   return;
-      // }
-
-      await _audioPlayer.setUrl(_streamUrl);
-      await _audioPlayer.play();
-    } catch (e, st) {
-      debugPrint('Erro ao iniciar o streaming: $e\n$st');
-      _showSnackBar('Erro ao iniciar o streaming: $e');
+      await _radioService.start();
+    } catch (e) {
+      debugPrint('Erro ao iniciar streaming: $e');
+      final errorMsg = e.toString().contains('conexão') 
+          ? 'Sem conexão com a internet. Verifique sua conexão e tente novamente.'
+          : 'Erro ao iniciar a transmissão. Tente novamente.';
+      
       if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isPlaying = false;
+        _errorMessage = errorMsg;
       });
+      _showSnackBar(errorMsg);
     }
   }
 
   Future<void> _stopStream() async {
     try {
-      await _audioPlayer.stop();
+      await _radioService.stop();
       if (!mounted) return;
       setState(() {
         _isPlaying = false;
-        _isLoading = false;
+        _errorMessage = null;
       });
-    } catch (e, st) {
-      debugPrint('Erro ao parar o streaming: $e\n$st');
-      _showSnackBar('Erro ao parar o streaming: $e');
+    } catch (e) {
+      debugPrint('Erro ao parar streaming: $e');
+      _showSnackBar('Erro ao parar a transmissão');
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -165,23 +164,25 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title,
-          style: const TextStyle(
+        title: const Text(
+          'Rádio Eirunepé',
+          style: TextStyle(
             color: Colors.white,
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
         ),
         backgroundColor: Theme.of(context).colorScheme.primary,
+        elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Container(
-          color: Theme.of(context).colorScheme.background,
-          padding: const EdgeInsets.all(20.0),
-          child: Center(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                const SizedBox(height: 20),
                 Text(
                   'Programa Eone Cavalcante',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -190,17 +191,32 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   child: Image.asset(
                     'logo_radio.jpg',
-                    height: 140,
-                    width: 140,
+                    height: 160,
+                    width: 160,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 160,
+                        width: 160,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          Icons.radio,
+                          size: 80,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
                 Text(
                   _isPlaying ? 'Tocando agora' : 'Pausado',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -209,76 +225,74 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 20),
-                _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                        onPressed: _isPlaying ? _stopStream : _startStream,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _isPlaying ? Icons.stop : Icons.play_arrow,
-                              color: Theme.of(context).colorScheme.onPrimary,
-                              size: 30,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _isPlaying ? 'Parar' : 'Tocar',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                const SizedBox(height: 20),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    Icon(
-                      Icons.phone,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 30,
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
                     ),
-                    Text(
-                      'Participe pelo telefone: (97) 98410-6555',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.onBackground,
+                    child: Row(
+                      children: [
+                        Icon(Icons.error_outline, color: Colors.red.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: TextStyle(color: Colors.red.shade700),
                           ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ],
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 70,
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : ElevatedButton.icon(
+                          onPressed: _isPlaying ? _stopStream : _startStream,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
+                          ),
+                          icon: Icon(
+                            _isPlaying ? Icons.stop : Icons.play_arrow,
+                            size: 32,
+                          ),
+                          label: Text(
+                            _isPlaying ? 'Parar' : 'Tocar',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 40),
+                _buildContactInfo(
+                  icon: Icons.phone,
+                  text: 'Participe pelo telefone: (97) 98410-6555',
+                  onTap: () {
+                    // Ação de ligação pode ser implementada com url_launcher
+                  },
                 ),
                 const SizedBox(height: 20),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    Icon(
-                      Icons.message,
-                      color: Colors.green,
-                      size: 30,
-                    ),
-                    Text(
-                      'Envie sua mensagem pelo WhatsApp!',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Theme.of(context).colorScheme.onBackground,
-                          ),
-                    ),
-                  ],
+                _buildContactInfo(
+                  icon: Icons.message,
+                  text: 'Envie sua mensagem pelo WhatsApp!',
+                  color: Colors.green,
+                  onTap: () {
+                    // Ação do WhatsApp pode ser implementada com url_launcher
+                  },
                 ),
               ],
             ),
@@ -288,19 +302,41 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  /// Método prático para exibir SnackBar sem repetição de código
-  void _showSnackBar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    }
+  Widget _buildContactInfo({
+    required IconData icon,
+    required String text,
+    Color? color,
+    VoidCallback? onTap,
+  }) {
+    final themeColor = color ?? Theme.of(context).colorScheme.primary;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: themeColor, size: 24),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                text,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onBackground,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _disposed = true;
-    _audioPlayer.dispose();
+    // Não dispose o player aqui pois é singleton
     super.dispose();
   }
 }

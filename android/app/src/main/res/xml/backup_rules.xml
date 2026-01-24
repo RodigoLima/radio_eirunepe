@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Este app não armazena dados sensíveis do usuário -->
+    <!-- Não há necessidade de fazer backup de dados -->
+</full-backup-content>

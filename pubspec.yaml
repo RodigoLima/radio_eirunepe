@@ -1,5 +1,5 @@
 name: radio_eirunepe
-description: "A new Flutter project."
+description: "Aplicativo oficial da Rádio Eirunepé. Ouça ao vivo o Programa Eone Cavalcante e participe da programação."
 publish_to: 'none'
 version: 1.0.1+6
 
@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
 
   just_audio: ^0.9.34
-  internet_connection_checker: ^1.0.0
+  audio_session: ^0.1.19
 
 dev_dependencies:
   flutter_test:

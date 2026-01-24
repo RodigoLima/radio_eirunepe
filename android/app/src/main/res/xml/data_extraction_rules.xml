@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <!-- Este app não armazena dados do usuário -->
+        <!-- Não há necessidade de backup em nuvem -->
+    </cloud-backup>
+    <device-transfer>
+        <!-- Este app não armazena dados do usuário -->
+        <!-- Não há necessidade de transferência de dados -->
+    </device-transfer>
+</data-extraction-rules>
