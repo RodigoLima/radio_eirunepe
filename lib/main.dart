@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
 import 'services/radio_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Configura orientação para portrait apenas (opcional)
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  
+  // Mantém a UI ativa mesmo quando o app vai para background
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  
   await RadioService().configure();
   runApp(const MyApp());
 }
@@ -62,7 +70,7 @@ class RadioHomePage extends StatefulWidget {
   State<RadioHomePage> createState() => _RadioHomePageState();
 }
 
-class _RadioHomePageState extends State<RadioHomePage> {
+class _RadioHomePageState extends State<RadioHomePage> with WidgetsBindingObserver {
   final RadioService _radioService = RadioService();
   bool _isPlaying = false;
   bool _isLoading = false;
@@ -71,7 +79,30 @@ class _RadioHomePageState extends State<RadioHomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _setupListeners();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // Quando o app vai para background ou retorna
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // App foi para background - garante que o áudio continue
+      debugPrint('App foi para background - mantendo áudio ativo');
+      // O just_audio já gerencia isso, mas garantimos que está tocando
+      if (_isPlaying && !_radioService.player.playing) {
+        _radioService.player.play();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // App voltou para foreground
+      debugPrint('App voltou para foreground');
+      // Verifica se ainda está tocando
+      if (_isPlaying && !_radioService.player.playing) {
+        _radioService.player.play();
+      }
+    }
   }
 
   void _setupListeners() {
@@ -340,6 +371,7 @@ class _RadioHomePageState extends State<RadioHomePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     // Não dispose o player aqui pois é singleton
     super.dispose();
   }
