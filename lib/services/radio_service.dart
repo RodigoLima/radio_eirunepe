@@ -11,6 +11,8 @@ class RadioService {
   final String _streamUrl = 'https://s12.maxcast.com.br:8824/live?id=391239150545';
   
   bool _isConfigured = false;
+  bool _shouldBePlaying = false;
+  bool _isReconnecting = false;
 
   AudioPlayer get player => _audioPlayer;
 
@@ -68,6 +70,36 @@ class RadioService {
             }
           }
         });
+
+        // Monitora erros de conexão e tenta reconectar automaticamente
+        _audioPlayer.playerStateStream.listen((state) {
+          // Se estava tocando e parou por erro, tenta reconectar
+          if (_shouldBePlaying && 
+              !state.playing && 
+              state.processingState == ProcessingState.idle &&
+              !_isReconnecting) {
+            _reconnect();
+          }
+        });
+
+        // Monitora erros de playback
+        _audioPlayer.playbackEventStream.listen((event) {
+          // Se houver erro de rede, tenta reconectar
+          if (event.bufferedPosition == Duration.zero && 
+              _shouldBePlaying && 
+              !_isReconnecting) {
+            Future.delayed(const Duration(seconds: 2), () {
+              if (_shouldBePlaying && !_audioPlayer.playing) {
+                _reconnect();
+              }
+            });
+          }
+        }, onError: (error) {
+          debugPrint('Erro no playback: $error');
+          if (_shouldBePlaying && !_isReconnecting) {
+            _reconnect();
+          }
+        });
       } catch (e) {
         // Ignora erros de configuração de audio session
         debugPrint('Erro ao configurar audio session: $e');
@@ -78,6 +110,7 @@ class RadioService {
   }
 
   Future<void> start() async {
+    _shouldBePlaying = true;
     // Tenta iniciar o stream - se não houver conexão, o próprio player lançará erro
     // Isso é mais leve que verificar conexão separadamente
     try {
@@ -89,7 +122,8 @@ class RadioService {
       // Converte erros de rede em mensagem amigável
       if (e.toString().contains('SocketException') || 
           e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Network')) {
+          e.toString().contains('Network') ||
+          e.toString().contains('UnknownHostException')) {
         throw Exception('Sem conexão com a internet');
       }
       rethrow;
@@ -97,7 +131,57 @@ class RadioService {
   }
 
   Future<void> stop() async {
+    _shouldBePlaying = false;
     await _audioPlayer.stop();
+  }
+
+  Future<void> _reconnect() async {
+    if (_isReconnecting || !_shouldBePlaying) return;
+    
+    _isReconnecting = true;
+    debugPrint('Tentando reconectar...');
+    
+    try {
+      // Aguarda um pouco antes de reconectar
+      await Future.delayed(const Duration(seconds: 2));
+      
+      if (!_shouldBePlaying) {
+        _isReconnecting = false;
+        return;
+      }
+
+      // Para o player atual
+      try {
+        await _audioPlayer.stop();
+      } catch (e) {
+        debugPrint('Erro ao parar player: $e');
+      }
+
+      // Aguarda um pouco
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Reconecta
+      await _audioPlayer.setUrl(_streamUrl);
+      await _audioPlayer.setLoopMode(LoopMode.one);
+      await _audioPlayer.setAutomaticallyWaitsToMinimizeStalling(false);
+      await _audioPlayer.play();
+      
+      debugPrint('Reconectado com sucesso');
+    } catch (e) {
+      debugPrint('Erro ao reconectar: $e');
+      // Tenta novamente após 5 segundos
+      if (_shouldBePlaying) {
+        Future.delayed(const Duration(seconds: 5), () {
+          if (_shouldBePlaying) {
+            _isReconnecting = false;
+            _reconnect();
+          }
+        });
+        return;
+      }
+    }
+    
+    _isReconnecting = false;
   }
 
   Future<void> dispose() async {

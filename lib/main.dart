@@ -86,10 +86,14 @@ class _RadioHomePageState extends State<RadioHomePage> {
         });
       } else if (playerState.processingState == ProcessingState.completed ||
                  playerState.processingState == ProcessingState.idle) {
-        setState(() {
-          _isLoading = false;
-          _isPlaying = false;
-        });
+        // Se estava tocando e ficou idle, pode estar reconectando
+        // Não atualiza o estado imediatamente para evitar flicker
+        if (!_isPlaying || playerState.playing) {
+          setState(() {
+            _isLoading = false;
+            _isPlaying = playerState.playing;
+          });
+        }
       } else if (playerState.processingState == ProcessingState.loading) {
         setState(() {
           _isLoading = true;
