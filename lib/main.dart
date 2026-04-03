@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'services/radio_service.dart';
 
 void main() async {
@@ -9,8 +10,13 @@ void main() async {
   // Configura orientação para portrait apenas (opcional)
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   
-  // Mantém a UI ativa mesmo quando o app vai para background
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.radio_eirunepe.channel.audio',
+    androidNotificationChannelName: 'Rádio Eirunepé',
+    androidNotificationOngoing: true,
+  );
   
   await RadioService().configure();
   runApp(const MyApp());

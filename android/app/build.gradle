@@ -27,7 +27,7 @@ android {
 
     defaultConfig {
         applicationId "com.radio_eirunepe.aab"
-        minSdk = 23  // Android 6.0 - compatível com 16KB page size
+        minSdkVersion = flutter.minSdkVersion  // Android 6.0 - compatível com 16KB page size
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
