@@ -53,10 +53,6 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Símbolos de depuração para Google Play Console
-            ndk {
-                debugSymbolLevel 'FULL'
-            }
         }
     }
 }
