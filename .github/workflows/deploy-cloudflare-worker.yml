@@ -1,4 +1,4 @@
-name: Deploy Web to Cloudflare Pages
+name: Deploy Web to Cloudflare Worker
 
 on:
   push:
@@ -13,6 +13,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CF_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME || 'radio-eirunepe' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -27,7 +29,8 @@ jobs:
       - id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
+          wranglerVersion: "4"
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy build/web --project-name=radio-eirunepe --branch=${{ github.ref_name }}
+          command: deploy --name=${{ env.CF_WORKER_NAME }} --commit-dirty=true
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
